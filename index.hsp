@@ -1,0 +1,568 @@
+//#runtime "hsp3cl"
+screen 0,ginfo(20),ginfo(21),0,,,1024,640
+title "Gocaine eZ80F91 debugger"
+prgmeditor="":uart1="":uart2="":editorobjid=-1:uartobjid=-1:uart1size=-1:uart2size=-1:uart1bak="":uart2bak=""
+
+#include "user32.as"
+#define WM_SIZE	0x00005	//ウィンドウサイズ変更
+#define WS_MAXIMIZEBOX	0x10000	//最大化ボタン
+#define WS_THICKFRAME	0x40000	//サイズ変更可能	
+GetWindowLong hwnd, -16
+SetWindowLong hwnd, -16, stat | WS_THICKFRAME | WS_MAXIMIZEBOX
+
+#enum IDM_Editor = 1
+#enum IDM_UART1
+#enum IDM_UART2
+#enum IDM_REGDEBUG
+#enum IDM_MEMDUMP
+#enum IDM_DISASM
+#enum IDM_RUNEZ80
+#enum IDM_STOPEZ80
+#enum IDM_STEPEZ80
+#enum IDM_ENDEZ80
+#enum IDM_LOAD
+#enum IDM_SAVEAS
+#enum IDM_SAVE
+
+#define ctype LOWORD(%1) (%1 & $FFFF)
+
+oncmd gosub *handler_wm_size,0x0005
+oncmd gosub *menu_command, $111
+
+	CreatePopupMenu
+	hMenu.1 = stat
+		AppendMenu hMenu.1, 0, IDM_LOAD, "Load"
+		//AppendMenu hMenu.1, $800, 0, ""	// 第2パラ$800は区切り線
+		//AppendMenu hMenu.1, 0, IDM_SAVEAS, "Save as"
+		//AppendMenu hMenu.1, 0, IDM_SAVE, "Overwrite"
+		//AppendMenu hMenu.1, $800, 0, ""	// 第2パラ$800は区切り線
+		//AppendMenu hMenu.1, 0, IDM_EXIT, "終了"
+
+	CreateMenu
+	hMenu.0 = stat
+	//AppendMenu hMenu.0, $10, hMenu.1, "メニュー1"
+	AppendMenu hMenu.0, $10, hMenu.1, "File"
+	//AppendMenu hMenu.0, $0, IDM_Editor, "Editor"
+	AppendMenu hMenu.0, $0, IDM_UART1, "UART1"
+	AppendMenu hMenu.0, $0, IDM_UART2, "UART2"
+	AppendMenu hMenu.0, $0, IDM_REGDEBUG, "Register"
+	AppendMenu hMenu.0, $0, IDM_MEMDUMP, "Memory Dump"
+	AppendMenu hMenu.0, $0, IDM_DISASM, "Disassembly"
+
+	AppendMenu hMenu.0, $4000, IDM_RUNEZ80, "RUN"
+	AppendMenu hMenu.0, $4000, IDM_STEPEZ80, "STEPRUN"
+	AppendMenu hMenu.0, $4000, IDM_STOPEZ80, "STOP"
+	AppendMenu hMenu.0, $4000, IDM_ENDEZ80, "END"
+
+	SetMenu hwnd, hMenu.0
+	DrawMenuBar hwnd
+
+	objectprm4chg=1
+	cls:gosub *changeobj
+
+#uselib "crtdll.dll"
+#cfunc _getch "_getch"
+#cfunc _kbhit "_kbhit"
+#func putchar "putchar" int
+
+#include "conioredir.as"
+#include "kernel32.as"
+
+
+/*
+
+HSP??R?[???o?b?N???W???[??
+HSP3.5 beta 3?????m?F
+?p?u???b?N?h???C?????
+CC0 1.0????C?Z???X?????(CC0??R?????Y?????? http://creativecommons.org/publicdomain/zero/1.0/deed.ja)
+
+
+?R?[???o?b?N??????
+makeclbkfunc p1,p2,3,p4
+p1=?????              ?R?[???o?b?N??????K?v??????n???????|?C???^(?T?u???[?`???????R?[???o?b?N??????|?C???^)????????
+p2=0~(0)               ?n????????????? (p2<=0???????????????)
+p3=???x????            ?R?[???o?b?N????????????T?u???[?`??????x??
+p4=0|1(0)              ??ﾑ出???K????? 0=stdcall 1=cdecl   p4??????????stdcall??????
+
+??????????????? (p2<=0) ??A??ﾑ出?????? lparam=NULL?A wparam=0 ??????
+????????????     (p2>0)  ??A??ﾑ出?????? lparam=???????o?b?t?@?A?h???X?A wparam=?????????? ??????
+?????????????m??G???[??? ??A??ﾑ出?????? lparam=NULL?A wparam=0 ??????
+
+?T?u???[?`???????????????? stat ????l???R?[???o?b?N????????l??????
+
+?????o?b?t?@??T?u???[?`?????????????????? (lparam?Awparam??l??ﾏ・???????)
+argclbkfunc ??????????謫ｾ??????A?????????????K?v??????Awparam?Alparam??l??j????????????
+
+
+lparam??wparam????????????謫ｾ
+argclbkfunc p1
+p1=?z??              ?????????謫ｾ???????^?z??
+
+?????????????^?z?????? p1 ?????????? (?????o?b?t?@????R?s?[??????)
+?R?[???o?b?N????????????T?u???[?`??????g?p???????????
+wparam ?? lparam ???謫ｾ?O??j???????????????ﾑ出?????????g?p???????????
+lparam ?? wparam ??`?F?b?N??s???????
+
+*/
+
+
+
+
+//???W???[??
+//-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|-----|//
+#ifndef _modulemakeclbkfuncah_def_
+#define _modulemakeclbkfuncah_def_
+#module
+
+	#uselib "kernel32.dll"
+	#func VirtualProtect "VirtualProtect" sptr,int,int,var
+
+	#const  FUNCSIZE     22         //?}?V????????
+	#const  FUNCSIZEBYT  FUNCSIZE*4 //?}?V????????(?o?C?g)
+
+	#const  PAGE_EXECUTE_READWRITE  $00000040
+
+	#deffunc makeclbkfunc var p_bin, int numargs, label label_sub, int clmode,\
+	local hspctx,\
+	local int_numargs,\
+	local lbl_tmp,\
+	local int_tmp,\
+	local bin,\
+	local int_stat
+
+		lbl_tmp = label_sub  //?T?u???[?`?????x??
+		mref hspctx,68
+		int_numargs = numargs & $80003FFF
+		int_stat=stat        //stat????
+
+		//?e?[?u??????????m??
+		static_arr_str_bin(static_int_idx) = "" // ????? / ?v?f???
+		memexpand static_arr_str_bin(static_int_idx), FUNCSIZEBYT
+		p_bin = varptr(static_arr_str_bin(static_int_idx))
+
+		//?}?V????
+		dupptr bin, p_bin, FUNCSIZEBYT
+		bin(0)  = $BE56C031       , varptr(hspctx(9)), $B9044689, int_numargs , $8D530689
+		bin(5)  = $0000989E       , $7EC98500        , $E1C1511C, $13FF5102   , $04468959
+		bin(10) = $74C08559       , $FF0E890C        , $8F088C74, $E2FC8844   , $68C689F6
+		bin(15) = lpeek(lbl_tmp,0), $581C53FF        , $0574F685, $0453ff56   , $54838B58
+		bin(20) = $5B000002       , $0000C35E
+		if clmode==0 & int_numargs>0{
+			bin(FUNCSIZE-1) = $C25E | int_numargs << 18  //stdcall????????????????X?^?b?N????
+		}
+
+		static_int_idx++
+		VirtualProtect p_bin, FUNCSIZEBYT, PAGE_EXECUTE_READWRITE, int_tmp
+		return int_stat
+
+
+	#deffunc argclbkfunc array arr_int_args,\
+	local cln_arr_int_tmp
+
+		dupptr cln_arr_int_tmp, lparam, wparam*4
+		dim arr_int_args, wparam
+		memcpy arr_int_args, cln_arr_int_tmp, wparam*4
+		return
+
+#global
+
+#endif
+
+id4eZ80sim=-1
+
+#include "vpaging4eZ80.as"
+#include "eZ80.as"
+#include "F91.as"
+dupptr eZ80pages,get_eZ80pages(),4096,2
+dim nullpagesdesc,4096
+#include "emulooper.as"
+makeclbkfunc clbk, 3, *RMKEARCH,1
+makeclbkfunc clbk2, 1, *SPIACC,1
+makeclbkfunc clbk3, 1, *GPIOACK,1
+makeclbkfunc clbkforuartcbk, 1, *UARTACK_X,1
+makeclbkfunc uartsignalingsin1, 1, *UARTACK_UARTIN,1
+makeclbkfunc uartsignalingsout1, 1, *UARTACK_UARTOUT,1
+dim noneuartsignalings,2
+uartsignalingsin(0)=uartsignalingsin1,uartsignalingsin1
+uartsignalingsout(0)=uartsignalingsout1,uartsignalingsout1
+noneuartsignalings(0)=clbkforuartcbk,clbkforuartcbk
+sdim memory,1024*1024*16
+sdim memory512,1024*512
+sdim flash8mb,1024*1024*8
+sdim sram512,512*1024
+repeat 5
+lpoke eZ80pages,00+(4*cnt),varptr(nullpagesdesc)
+lpoke eZ80pages,20+(4*cnt),4096
+lpoke eZ80pages,40+(4*cnt),clbk
+loop
+repeat 4096:mempagestable(cnt)=varptr(memory)+(4096*cnt):loop
+repeat 4096:mempagestable512(cnt)=varptr(memory512)+(4096*(cnt\0x80)):loop
+repeat 4096:flash8mbtable(cnt)=varptr(flash8mb)+(4096*(cnt\0x800)):loop
+lpoke eZ80pages,4*1,varptr(flash8mbtable)
+lpoke eZ80pages,4*2,varptr(mempagestable512)
+//dupptr memoryc00000,varptr(memory)+0xc00000,65536,2
+//bload "eZ80-CPM.bin",memoryc00000
+//wpoke memory,0,0x7ded
+/*poke memory,0,0x3e
+poke memory,1,0x0
+poke memory,2,0xed
+poke memory,3,0x39
+poke memory,4,0x97
+poke memory,5,0x3e
+poke memory,6,45
+poke memory,7,0xed
+poke memory,8,0x39
+poke memory,9,0x96*/
+dupptr eZ80_reg,cpu_get_regptr(),64,2
+dupptr eZ80_stat,cpu_get_stat(),4096,2
+ez80macfuncset varptr(mac4ez80dll)
+//f91macfuncset clbk,clbk2,varptr(cpu_int),varptr(cpu_reset),varptr(cpu_execute),clbk3,varptr(cpu_get_interruptstat)
+f91macfuncset varptr(eZ80memaccess),clbk2,varptr(cpu_int),varptr(cpu_reset),varptr(cpu_execute),clbk3,varptr(cpu_get_interruptstat)
+cpu_init
+exist "flash.img"
+if strsize=-1{sdim flashimg,256*1024:bsave "flash.img",flashimg:dim flashimg,1}
+f91internalflashpathset "flash.img"
+f91_setmsgcbUART varptr(uartsignalingsin),varptr(uartsignalingsout),varptr(noneuartsignalings),varptr(noneuartsignalings),varptr(noneuartsignalings),varptr(noneuartsignalings)
+f91_reset
+//control_reset
+/*dupptr struct4inkey,initredir(varptr(f91_transmitUART),varptr(_getch),2),140,4
+CreateThread 0,0,varptr(startredir),varptr(struct4inkey),0,0*/
+
+#module
+#deffunc eZ80dismmemaccess int prm_0,int prm_1,int prm_2
+return mac4ez80dll@(prm_0,prm_1,prm_2)
+#global
+#include "eZ80disasm.as"
+#include "ggthread.as"
+sdim threadctx,4096,256
+dim threadctxrcg,1024,2,256
+
+#module
+#defcfunc cre_tsk label prm_0
+taskidnow=-1
+repeat 256
+if lpeek(threadctx@(cnt),0)=0{taskidnow=cnt:break}
+loop
+if taskidnow!-1{
+ggthreadsetpc threadctx@(taskidnow),prm_0
+ggthreadloadenv threadctx@(taskidnow)
+ggthreadsetstks threadctx@(taskidnow),varptr(threadctxrcg@(0,0,taskidnow)),varptr(threadctxrcg@(0,1,taskidnow))
+}
+return taskidnow
+#global
+
+ret=cre_tsk(*chktextwindow4uart)
+
+repeat
+redraw 0
+repeat 256:cnt4threadid=cnt
+if lpeek(threadctx(cnt4threadid),0)!0{ggthreadrun threadctx(cnt4threadid)}
+loop
+redraw 1
+await
+loop
+
+*eZ80sim
+f91_reset
+//control_reset
+*eZ80sim_loop
+repeat 50000000:if ez80stop=0{continue cnt+f91_execute_cc(100000)}:loop
+goto *eZ80sim_loop
+lpoke threadctx(cnt4threadid),0,0
+id4eZ80sim=-1
+stop
+
+*chktextwindow4uart
+chktextwin4uart12
+goto *chktextwindow4uart
+
+#deffunc chktextwin4uart12
+if uart1size!-1 & uart1size!strlen(uart1){
+if uart1size<strlen(uart1){
+if peek(uart1,strlen(uart1)-1)=0x0d{poke uart1,strlen(uart1)-1,0x0a}
+f91_transmitUART 0,peek(uart1,strlen(uart1)-1)
+}else{
+f91_transmitUART 0,8
+}
+memset uart1,0,strlen(uart1),0
+memcpy uart1,uart1bak,strlen(uart1bak),0,0
+}
+
+if uart2size!-1 & uart2size!strlen(uart2){
+if uart2size<strlen(uart2){
+if peek(uart2,strlen(uart2)-1)=0x0d{poke uart2,strlen(uart2)-1,0x0a}
+f91_transmitUART 1,peek(uart2,strlen(uart2)-1)
+}else{
+f91_transmitUART 1,8
+}
+memset uart2,0,strlen(uart2),0
+memcpy uart1,uart1bak,strlen(uart1bak),0,0
+}
+if objectprm4chg=3{
+color 255,255,255:boxf
+pos 0,0:color 0,0,0
+mes "  AF:  "+strf("%04X",wpeek(eZ80_reg,0))+"   BC:"+strf("%06X",lpeek(eZ80_reg,4))
+mes "  DE:"+strf("%06X",lpeek(eZ80_reg,8))+"   HL:"+strf("%06X",lpeek(eZ80_reg,12))
+mes "  IX:"+strf("%06X",lpeek(eZ80_reg,20))+"   IY:"+strf("%06X",lpeek(eZ80_reg,24))
+mes " _AF:  "+strf("%04X",wpeek(eZ80_reg,28))+"  _BC:"+strf("%06X",lpeek(eZ80_reg,32))
+mes " _DE:"+strf("%06X",lpeek(eZ80_reg,36))+"  _HL:"+strf("%06X",lpeek(eZ80_reg,16))
+mes " SPS:  "+strf("%04X",lpeek(eZ80_reg,40))+"   SP:"+strf("%06X",lpeek(eZ80_reg,44))
+mes "  PC:"+strf("%06X",(lpeek(eZ80_reg,52)-1)&0xFFFFFF)+"    I:  "+strf("%04X",wpeek(eZ80_reg,56))
+mes "   R:    "+strf("%02X",peek(eZ80_reg,58))+"   MB:    "+strf("%02X",peek(eZ80_reg,59))
+mes " ADL:     "+str((peek(eZ80_stat,0x6a)&0x08)!0)+" MADL:     "+str((peek(eZ80_stat,0x6a)&0x10)!0)
+}
+if objectprm4chg=4{
+color 255,255,255:boxf
+pos 0,0:color 0,0,0
+if ez80stop=0 & id4eZ80sim!-1{dumpstartpos=lpeek(eZ80_reg,48)&0xFFFFF0}
+dumpstartposold=dumpstartpos
+dumpstartpos&=0xFFFFF0
+repeat (ginfo(13)/18)-1
+mes strf("%06X",dumpstartpos)+":",1:repeat 16:if (dumpstartpos=(lpeek(eZ80_reg,48)&0xFFFFF0)) & (cnt=(peek(eZ80_reg,48)&0xF)){color 0,0,0:boxf ginfo(22)+8,ginfo(23),ginfo(22)+24,ginfo(23)+18:color 255,255,255}else{color 0,0,0}:mes " "+strf("%02X",mac4ez80dll(dumpstartpos+cnt,0,1)),1:loop:ginfo2223fortmp=ginfo(22)+40,ginfo(23):repeat 16:pos ginfo2223fortmp(0),ginfo2223fortmp(1):if (dumpstartpos=(lpeek(eZ80_reg,48)&0xFFFFF0)) & (cnt=(peek(eZ80_reg,48)&0xF)){color 0,0,0:boxf ginfo(22)+0,ginfo(23),ginfo(22)+16,ginfo(23)+18:color 255,255,255}else{color 0,0,0}:mes strf("%c",mac4ez80dll(dumpstartpos+cnt,0,1))+" ",1:ginfo2223fortmp(0)+=16:loop:mes "":pos 0,ginfo(23)
+dumpstartpos+=16
+dumpstartpos&=0xFFFFFF
+loop
+dumpstartpos=dumpstartposold
+}
+if objectprm4chg=5{
+color 255,255,255:boxf
+color 0,255,0
+line 0,18,ginfo(12),18
+pos 0,0:color 0,0,0
+if ez80stop=0 & id4eZ80sim!-1{dumpstartpos=lpeek(eZ80_reg,48)}
+dumpstartposold=dumpstartpos
+repeat (ginfo(13)/18)-1
+mes strf("%06X",dumpstartpos|(((peek(eZ80_stat,0x6a)&0x08)=0)*(peek(eZ80_reg,59)<<16)))+":"+eZ80disasm(dumpstartpos,((peek(eZ80_stat,0x6a)&0x08)!0),peek(eZ80_reg,59))
+//dumpstartpos++
+dumpstartpos&=0xFFFFFF
+loop
+dumpstartpos=dumpstartposold
+}
+return
+
+*GPIOACK
+argclbkfunc gpio
+//dialog f91gpiocall(gpio,0,1)
+return 0
+*SPIACC
+argclbkfunc spiio
+if spimisocalli=0{
+f91spimisocall 1
+}else{
+f91spimisocall 0
+}
+spimisocalli++:if spimisocalli=8{spimisocalli=0}
+//dialog spiio
+return 0
+*RMKEARCH
+await
+argclbkfunc argv
+switch (argv(2)>>24)&0xF
+case 0
+
+switch argv(2)&3
+case 0
+//logmes strf("%08X",argv(0)):await
+poke memory,argv(0),argv(1)
+return peek(memory,argv(0))
+swbreak
+case 1
+return peek(memory,argv(0))
+swbreak
+swend
+
+swbreak
+case 1
+
+switch argv(2)&3
+case 0
+//logmes strf("%08X",argv(0)):await
+poke sram512,argv(0)&0x7FFFF,argv(1)
+return peek(sram512,argv(0)&0x7FFFF)
+swbreak
+case 1
+return peek(sram512,argv(0)&0x7FFFF)
+swbreak
+swend
+
+swbreak
+swend
+return 0
+//if argv(0)=4{dialog}
+await
+return peek(memory,argv(0))
+
+*UARTACK_X
+return 0
+*UARTACK_UARTIN
+return 0
+argclbkfunc uartinio
+if uartinio{return 0}
+await
+if (_kbhit()!0){
+f91_transmitUART 0,_getch()
+}
+return 0
+*UARTACK_UARTOUT
+/*if uart1size!-1 & uart1size!strlen(uart1){
+f91_transmitUART 0,peek(uart1,uart1size)
+}*/
+text4add="":poke text4add,0,f91_receiveUART(0)&0xFF
+if peek(text4add,0)=8{uart1=strmid(uart1,0,strlen(uart1)-1):uart1bak=strmid(uart1bak,0,strlen(uart1bak)-1)}else{
+uart1+=text4add
+uart1bak+=text4add
+}
+uart1size=strlen(uart1)
+
+/*if uart2size!-1 & uart2size!strlen(uart2){
+f91_transmitUART 1,peek(uart2,uart2size)
+}*/
+text4add="":poke text4add,0,f91_receiveUART(1)&0xFF
+if peek(text4add,0)=8{uart2=strmid(uart2,0,strlen(uart2)-1):uart2bak=strmid(uart2bak,0,strlen(uart2bak)-1)}else{
+uart2+=text4add
+uart2bak+=text4add
+}
+uart2size=strlen(uart2)
+
+if uartobjid!-1{
+switch objectprm4chg
+case 1
+objprm uartobjid,uart1
+sendmsg objinfo_hwnd(uartobjid),0xb6,0,0x7fffffff//0xffff
+sendmsg objinfo_hwnd(uartobjid),0xb1,0xfffefffe,0xfffefffe
+swbreak
+case 2
+objprm uartobjid,uart2
+sendmsg objinfo_hwnd(uartobjid),0xb6,0,0x7fffffff//0xffff
+sendmsg objinfo_hwnd(uartobjid),0xb1,0xfffefffe,0xfffefffe
+swbreak
+swend
+}
+//putchar f91_receiveUART(0)&0xFF
+return 0
+
+*menu_command
+	if lparam = 0 {
+		wID = LOWORD(wparam)
+		switch wID
+		case IDM_Editor
+		objectprm4chg=0
+		gosub *changeobj
+		swbreak
+		case IDM_UART1
+		objectprm4chg=1
+		gosub *changeobj
+		swbreak
+		case IDM_UART2
+		objectprm4chg=2
+		gosub *changeobj
+		swbreak
+		case IDM_REGDEBUG
+		objectprm4chg=3
+		gosub *changeobj
+		swbreak
+		case IDM_MEMDUMP
+		objectprm4chg=4
+		gosub *changeobj
+		swbreak
+		case IDM_DISASM
+		objectprm4chg=5
+		gosub *changeobj
+		swbreak
+		case IDM_RUNEZ80
+		if id4eZ80sim=-1{
+		id4eZ80sim=cre_tsk(*eZ80sim)
+		}
+		if id4eZ80sim!-1{ez80stop=0}
+		swbreak
+		case IDM_STOPEZ80
+		if id4eZ80sim!-1{ez80stop=1}
+		swbreak
+		case IDM_STEPEZ80
+		ez80stop=1
+		if id4eZ80sim=-1{
+		id4eZ80sim=cre_tsk(*eZ80sim)
+		}
+		if id4eZ80sim!-1{ret=f91_execute_cc(1):dumpstartpos=lpeek(eZ80_reg,48)&0xFFFFFF:dumpstartposstr=strf("%06X",dumpstartpos&0xFFFFFF)}
+		swbreak
+		case IDM_ENDEZ80
+		if id4eZ80sim!-1{
+			lpoke threadctx(id4eZ80sim),0,0
+			id4eZ80sim=-1
+			ez80stop=0
+			f91_reset
+			uart1size=-1:uart2size=-1
+			uart1="":uart2="":uart1bak="":uart2bak=""
+			dumpstartpos=0:dumpstartposold=0
+			switch objectprm4chg
+			case 1
+			objprm uartobjid,uart1
+			swbreak
+			case 2
+			objprm uartobjid,uart2
+			swbreak
+			swend
+		}
+		swbreak
+		case IDM_LOAD
+		dir_old=""+dir_cur
+		dialog "*",16,"eZ80F91 Internal Flash Image"
+		if stat!0{f91internalflashpathset refstr}
+		chdir dir_old
+		swbreak
+		swend
+	}
+return
+
+*handler_wm_size
+lparam4wmsize=lparam
+gosub *changeobj
+return
+
+*changeobj
+cls
+objsize ginfo(12),ginfo(13),0
+pos 0,0
+switch objectprm4chg
+case 0
+mesbox prgmeditor,ginfo(12),ginfo(13),1,16*1024*1024
+editorobjid=stat:uartobjid=-1
+swbreak
+case 1
+mesbox uart1,ginfo(12),ginfo(13),1,16*1024*1024
+uartobjid=stat:editorobjid-1
+swbreak
+case 2
+mesbox uart2,ginfo(12),ginfo(13),1,16*1024*1024
+uartobjid=stat:editorobjid-1
+swbreak
+case 4
+pos 0,((ginfo(13)/18)-1)*18
+dumpstartposstr="000000"
+input dumpstartposstr,ginfo(12)-64,18,1024
+dumpstartposstrinputid=stat
+pos ginfo(12)-64,((ginfo(13)/18)-1)*18
+objsize 64,18,0
+button gosub "Move",*dump_moveaddr
+swbreak
+case 5
+pos 0,((ginfo(13)/18)-1)*18
+dumpstartposstr="000000"
+input dumpstartposstr,ginfo(12)-64,18,1024
+dumpstartposstrinputid=stat
+pos ginfo(12)-64,((ginfo(13)/18)-1)*18
+objsize 64,18,0
+button gosub "Move",*dump_moveaddr2
+swbreak
+swend
+return
+
+*dump_moveaddr
+dumpstartpos=int("$"+dumpstartposstr)&0xFFFFF0
+objprm dumpstartposstrinputid,strf("%06X",dumpstartpos)
+return
+
+*dump_moveaddr2
+dumpstartpos=int("$"+dumpstartposstr)&0xFFFFFF
+objprm dumpstartposstrinputid,strf("%06X",dumpstartpos)
+return
