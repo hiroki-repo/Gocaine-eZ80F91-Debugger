@@ -200,6 +200,7 @@ repeat 4096:mempagestable512(cnt)=varptr(memory512)+(4096*(cnt\0x80)):loop
 repeat 4096:flash8mbtable(cnt)=varptr(flash8mb)+(4096*(cnt\0x800)):loop
 lpoke eZ80pages,4*1,varptr(flash8mbtable)
 lpoke eZ80pages,4*2,varptr(mempagestable512)
+mmcspibuf=0,0:mmcidle=1
 //dupptr memoryc00000,varptr(memory)+0xc00000,65536,2
 //bload "eZ80-CPM.bin",memoryc00000
 //wpoke memory,0,0x7ded
@@ -252,6 +253,7 @@ return taskidnow
 #global
 
 ret=cre_tsk(*chktextwindow4uart)
+ret=cre_tsk(*emulate_mmc)
 
 repeat
 redraw 0
@@ -332,13 +334,258 @@ pos 0,0:color 0,0,0
 if ez80stop=0 & id4eZ80sim!-1{dumpstartpos=lpeek(eZ80_reg,48)}
 dumpstartposold=dumpstartpos
 repeat (ginfo(13)/18)-1
-mes strf("%06X",dumpstartpos|(((peek(eZ80_stat,0x6a)&0x08)=0)*(peek(eZ80_reg,59)<<16)))+":"+eZ80disasm(dumpstartpos,((peek(eZ80_stat,0x6a)&0x08)!0),peek(eZ80_reg,59))
+mes strf("%06X",dumpstartpos|(((peek(eZ80_stat,0x6a)&0x08)=0)*(peek(eZ80_reg,59)<<16)))+":"+eZ80disasm(dumpstartpos,((peek(eZ80_stat,0x6a)&0x08)!0),peek(eZ80_reg,59)|(((dumpstartposold>>16)&0xFF)*((peek(eZ80_stat,0x6a)&0x08)=0)))
 //dumpstartpos++
 dumpstartpos&=0xFFFFFF
+if ((peek(eZ80_stat,0x6a)&0x08)=0){dumpstartpos |= dumpstartposold & 0xFF0000}
 loop
 dumpstartpos=dumpstartposold
 }
 return
+
+#deffunc emulate_mmc_once
+if spiinitalizedi>=8{
+	if (peek(mmcspibuf,0)&0x40)=0 & mmcspibufpos>0{mmcspibufpos=0}
+	//if returnresponsesize=0{repeat 256:ret=mac4ez80dll(0xbc,0,3):loop}
+	if (peek(mmcspibuf,0)=0xFF) & returnresponsesize=0{
+	f91spimisocall (mmcidle!0)
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	mmcspibuf=0,0:mmcspibufpos=0
+	}else{
+	if mmcspibufpos>=6{
+	//if peek(mmcspibuf,5)=0x95{dialog strf("%02X",peek(mmcspibuf,0))}
+	if iscmd55=0{
+	switch peek(mmcspibuf,0)&0x3f
+	case 0
+	f91spimisocall 1
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	mmcidle=1
+	swbreak
+	case 1
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	mmcidle=0
+	swbreak
+	case 9
+	case 10
+	if returnresponsesize=0{returnresponsesize=20}
+	if returnresponsesize=20{
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	}
+	if returnresponsesize=19{
+	f91spimisocall 1
+	f91spimisocall 1
+	f91spimisocall 1
+	f91spimisocall 1
+	f91spimisocall 1
+	f91spimisocall 1
+	f91spimisocall 1
+	f91spimisocall 0
+	}
+	if returnresponsesize<=18 & returnresponsesize>=3{
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	}
+	if returnresponsesize=2{
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	}
+	if returnresponsesize=1{
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	}
+	returnresponsesize--
+	swbreak
+	case 17
+	if returnresponsesize=0{returnresponsesize=517}
+	if returnresponsesize=517{
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	}
+	if returnresponsesize=516{
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	}
+	if returnresponsesize=515{
+	f91spimisocall 0
+	f91spimisocall 1
+	f91spimisocall 1
+	f91spimisocall 1
+	f91spimisocall 1
+	f91spimisocall 1
+	f91spimisocall 1
+	f91spimisocall 1
+	}
+	if returnresponsesize<=514 & returnresponsesize>=3{
+	f91spimisocall 1
+	f91spimisocall 0
+	f91spimisocall 1
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 1
+	f91spimisocall 1
+	f91spimisocall 1
+	}
+	if returnresponsesize=2{
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	}
+	if returnresponsesize=1{
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	}
+	returnresponsesize--
+	swbreak
+	case 55
+	iscmd55=1
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	swbreak
+	case 58
+	if returnresponsesize=0{returnresponsesize=4}
+	if returnresponsesize=4{
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	}
+	if returnresponsesize=3{
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	}
+	if returnresponsesize=2{
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	}
+	if returnresponsesize=1{
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	}
+	returnresponsesize--
+	swbreak
+	default
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 1
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	swbreak
+	swend
+	}else{
+	switch peek(mmcspibuf,0)&0x3f
+	swend
+	}
+		if returnresponsesize=0{
+			if (peek(mmcspibuf,0)&0x3f)!55&iscmd55=1{iscmd55=0}
+			mmcspibuf=0,0:mmcspibufpos=0
+			returnresponsesize=0
+		}
+	}
+	}
+}
+return
+
+*emulate_mmc
+if mmcspibufpos>=1{emulate_mmc_once}
+goto *emulate_mmc
 
 *GPIOACK
 argclbkfunc gpio
@@ -346,10 +593,16 @@ argclbkfunc gpio
 return 0
 *SPIACC
 argclbkfunc spiio
-if spimisocalli=0{
-f91spimisocall 1
-}else{
-f91spimisocall 0
+if (((spiio&1)!0) & spimisocalli=7 & spiinitalizedi<8) {spiinitalizedi++}
+if spiinitalizedi>=8{
+	if returnresponsesize=0{
+		poke mmcspibuf,mmcspibufpos,peek(mmcspibuf,mmcspibufpos)|((spiio&1)<<spimisocalli)
+		if spimisocalli>=7{
+		mmcspibufpos++
+		//if mmcspibufpos=6{dialog}
+		if mmcspibufpos>=1{emulate_mmc_once}
+		}
+	}
 }
 spimisocalli++:if spimisocalli=8{spimisocalli=0}
 //dialog spiio
@@ -494,6 +747,9 @@ return 0
 			uart1size=-1:uart2size=-1
 			uart1="":uart2="":uart1bak="":uart2bak=""
 			dumpstartpos=0:dumpstartposold=0
+			spiinitalizedi=0:mmcspibuf=0,0:mmcspibufpos=0:mmcidle=1
+			memset memory,0,16*1024*1024,0
+			memset memory512,0,512*1024,0
 			switch objectprm4chg
 			case 1
 			objprm uartobjid,uart1
