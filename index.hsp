@@ -589,6 +589,7 @@ goto *emulate_mmc
 
 *GPIOACK
 argclbkfunc gpio
+ret4gpio=f91gpiocall(3,0,0)
 //dialog f91gpiocall(gpio,0,1)
 return 0
 *SPIACC
