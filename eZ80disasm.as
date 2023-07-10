@@ -496,11 +496,13 @@ swbreak
 case 2
 addrbase=eZ80dism_readb(addr)
 addr++
+prm_0_=addr
 return "TST"+suffix+" A,"+strf("%03X",addrbase)+"H"
 swbreak
 case 3
 addrbase=eZ80dism_readb(addr)
 addr++
+prm_0_=addr
 return "TSTIO"+suffix+" "+strf("%03X",addrbase)+"H"
 swbreak
 swend
@@ -594,11 +596,13 @@ return instio(opcode-0x80)+suffix
 }
 }
 if opcode=0xd7{
+prm_0_=addr
 return "LD"+suffix+" HL,I"
 }
 swbreak
 swend
 }else{
+prm_0_=addr
 return "PUSH"+suffix+" "+eZ80disasm_rphij(((opcode>>4)&3),ixyflag)
 }
 swbreak
