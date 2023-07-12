@@ -182,9 +182,11 @@ makeclbkfunc clbk3, 1, *GPIOACK,1
 makeclbkfunc clbkforuartcbk, 1, *UARTACK_X,1
 makeclbkfunc uartsignalingsin1, 1, *UARTACK_UARTIN,1
 makeclbkfunc uartsignalingsout1, 1, *UARTACK_UARTOUT,1
+makeclbkfunc uartsignalingsin2, 1, *UARTACK_UARTIN2,1
+makeclbkfunc uartsignalingsout2, 1, *UARTACK_UARTOUT2,1
 dim noneuartsignalings,2
-uartsignalingsin(0)=uartsignalingsin1,uartsignalingsin1
-uartsignalingsout(0)=uartsignalingsout1,uartsignalingsout1
+uartsignalingsin(0)=uartsignalingsin1,uartsignalingsin2
+uartsignalingsout(0)=uartsignalingsout1,uartsignalingsout2
 noneuartsignalings(0)=clbkforuartcbk,clbkforuartcbk
 sdim memory,1024*1024*16
 sdim memory512,1024*512
@@ -657,6 +659,8 @@ if (_kbhit()!0){
 f91_transmitUART 0,_getch()
 }
 return 0
+*UARTACK_UARTIN2
+return 0
 *UARTACK_UARTOUT
 /*if uart1size!-1 & uart1size!strlen(uart1){
 f91_transmitUART 0,peek(uart1,uart1size)
@@ -668,6 +672,23 @@ uart1bak+=text4add
 }
 uart1size=strlen(uart1)
 
+if uartobjid!-1{
+switch objectprm4chg
+case 1
+objprm uartobjid,uart1
+sendmsg objinfo_hwnd(uartobjid),0xb6,0,0x7fffffff//0xffff
+sendmsg objinfo_hwnd(uartobjid),0xb1,0xfffefffe,0xfffefffe
+swbreak
+case 2
+objprm uartobjid,uart2
+sendmsg objinfo_hwnd(uartobjid),0xb6,0,0x7fffffff//0xffff
+sendmsg objinfo_hwnd(uartobjid),0xb1,0xfffefffe,0xfffefffe
+swbreak
+swend
+}
+//putchar f91_receiveUART(0)&0xFF
+return 0
+*UARTACK_UARTOUT2
 /*if uart2size!-1 & uart2size!strlen(uart2){
 f91_transmitUART 1,peek(uart2,uart2size)
 }*/
