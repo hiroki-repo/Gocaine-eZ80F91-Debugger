@@ -24,9 +24,9 @@ return
 #defcfunc local eZ80disasm_rpk int prm_0
 if prm_0>=1{
 if relpos>127{flag4rel="-":relpos=-((relpos^128)-128)}else{flag4rel="+"}
-return strf(eZ80disasm_rpk(prm_0),flag4rel,relpos)
+return strf(rpk(prm_0),flag4rel,relpos)
 }
-return eZ80disasm_rpk(prm_0)
+return rpk(prm_0)
 #defcfunc local eZ80disasm_rpcde int prm_0,int prm_1_
 if relpos>127{flag4rel="-":relpos=-((relpos^128)-128)}else{flag4rel="+"}
 switch prm_1_
@@ -54,6 +54,19 @@ return rpg(prm_0)
 swbreak
 swend
 return rpa(prm_0)
+#defcfunc local eZ80disasm_rpglm int prm_0,int prm_1_
+switch prm_1_
+case 0
+return rpg(prm_0)
+swbreak
+case 1
+return rpl(prm_0)
+swbreak
+case 2
+return rpm(prm_0)
+swbreak
+swend
+return rpg(prm_0)
 #defcfunc local eZ80disasm_rphij int prm_0,int prm_1_
 switch prm_1_
 case 0
@@ -261,8 +274,18 @@ prm_0_=addr
 return "LD"+suffix+" "+eZ80disasm_rpcde(((opcode>>3)&7),ixyflag)+","+strf("%03X",addrbase)+"H"
 swbreak
 case 7
+if ixyflag=0{
 prm_0_=addr
 return inst00407((opcode>>3)&7)+suffix
+}else{
+relpos=eZ80dism_readb(addr):addr++
+prm_0_=addr
+if (opcode&0x8)=0{
+return "LD"+suffix+" "+eZ80disasm_rpglm(((opcode>>4)&3),ixyflag)+",("+eZ80disasm_rpk(ixyflag)+")"
+}else{
+return "LD"+suffix+" ("+eZ80disasm_rpk(ixyflag)+"),"+eZ80disasm_rpglm(((opcode>>4)&3),ixyflag)
+}
+}
 swbreak
 swend
 }

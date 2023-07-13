@@ -1,6 +1,7 @@
 //#runtime "hsp3cl"
 screen 0,ginfo(20),ginfo(21),0,,,1024,640
 title "Gocaine eZ80F91 debugger"
+onerror gosub *bypasserror
 prgmeditor="":uart1="":uart2="":editorobjid=-1:uartobjid=-1:uart1size=-1:uart2size=-1:uart1bak="":uart2bak=""
 
 #include "user32.as"
@@ -200,6 +201,7 @@ loop
 repeat 4096:mempagestable(cnt)=varptr(memory)+(4096*cnt):loop
 repeat 4096:mempagestable512(cnt)=varptr(memory512)+(4096*(cnt\0x80)):loop
 repeat 4096:flash8mbtable(cnt)=varptr(flash8mb)+(4096*(cnt\0x800)):loop
+lpoke eZ80pages,4*0,varptr(mempagestable)
 lpoke eZ80pages,4*1,varptr(flash8mbtable)
 lpoke eZ80pages,4*2,varptr(mempagestable512)
 mmcspibuf=0,0:mmcidle=1
@@ -310,7 +312,7 @@ mes "  DE:"+strf("%06X",lpeek(eZ80_reg,8))+"   HL:"+strf("%06X",lpeek(eZ80_reg,1
 mes "  IX:"+strf("%06X",lpeek(eZ80_reg,20))+"   IY:"+strf("%06X",lpeek(eZ80_reg,24))
 mes " _AF:  "+strf("%04X",wpeek(eZ80_reg,28))+"  _BC:"+strf("%06X",lpeek(eZ80_reg,32))
 mes " _DE:"+strf("%06X",lpeek(eZ80_reg,36))+"  _HL:"+strf("%06X",lpeek(eZ80_reg,16))
-mes " SPS:  "+strf("%04X",lpeek(eZ80_reg,40))+"   SP:"+strf("%06X",lpeek(eZ80_reg,44))
+mes " SPS:  "+strf("%04X",wpeek(eZ80_reg,40))+"   SP:"+strf("%06X",lpeek(eZ80_reg,44))
 mes "  PC:"+strf("%06X",(lpeek(eZ80_reg,52)-1)&0xFFFFFF)+"    I:  "+strf("%04X",wpeek(eZ80_reg,56))
 mes "   R:    "+strf("%02X",peek(eZ80_reg,58))+"   MB:    "+strf("%02X",peek(eZ80_reg,59))
 mes " ADL:     "+str((peek(eZ80_stat,0x6a)&0x08)!0)+" MADL:     "+str((peek(eZ80_stat,0x6a)&0x10)!0)
@@ -572,6 +574,14 @@ if spiinitalizedi>=8{
 	swbreak
 	swend
 	}else{
+	/*f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0
+	f91spimisocall 0*/
 	switch peek(mmcspibuf,0)&0x3f
 	swend
 	}
@@ -679,11 +689,11 @@ objprm uartobjid,uart1
 sendmsg objinfo_hwnd(uartobjid),0xb6,0,0x7fffffff//0xffff
 sendmsg objinfo_hwnd(uartobjid),0xb1,0xfffefffe,0xfffefffe
 swbreak
-case 2
+/*case 2
 objprm uartobjid,uart2
 sendmsg objinfo_hwnd(uartobjid),0xb6,0,0x7fffffff//0xffff
 sendmsg objinfo_hwnd(uartobjid),0xb1,0xfffefffe,0xfffefffe
-swbreak
+swbreak*/
 swend
 }
 //putchar f91_receiveUART(0)&0xFF
@@ -701,11 +711,11 @@ uart2size=strlen(uart2)
 
 if uartobjid!-1{
 switch objectprm4chg
-case 1
+/*case 1
 objprm uartobjid,uart1
 sendmsg objinfo_hwnd(uartobjid),0xb6,0,0x7fffffff//0xffff
 sendmsg objinfo_hwnd(uartobjid),0xb1,0xfffefffe,0xfffefffe
-swbreak
+swbreak*/
 case 2
 objprm uartobjid,uart2
 sendmsg objinfo_hwnd(uartobjid),0xb6,0,0x7fffffff//0xffff
@@ -843,4 +853,7 @@ return
 *dump_moveaddr2
 dumpstartpos=int("$"+dumpstartposstr)&0xFFFFFF
 objprm dumpstartposstrinputid,strf("%06X",dumpstartpos)
+return
+
+*bypasserror
 return
