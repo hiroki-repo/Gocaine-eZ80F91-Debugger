@@ -1,7 +1,7 @@
 //#runtime "hsp3cl"
 screen 0,ginfo(20),ginfo(21),0,,,1024,640
 title "Gocaine eZ80F91 debugger"
-onerror gosub *bypasserror
+//onerror gosub *bypasserror
 prgmeditor="":uart1="":uart2="":editorobjid=-1:uartobjid=-1:uart1size=-1:uart2size=-1:uart1bak="":uart2bak=""
 
 #include "user32.as"
@@ -290,8 +290,22 @@ f91_transmitUART 0,peek(uart1,strlen(uart1)-1)
 }else{
 f91_transmitUART 0,8
 }
-memset uart1,0,strlen(uart1),0
+memset uart1,0,varsize(uart1),0
 memcpy uart1,uart1bak,strlen(uart1bak),0,0
+if uartobjid!-1{
+switch objectprm4chg
+case 1
+objprm uartobjid,uart1
+sendmsg objinfo_hwnd(uartobjid),0xb6,0,0x7fffffff//0xffff
+sendmsg objinfo_hwnd(uartobjid),0xb1,0xfffefffe,0xfffefffe
+swbreak
+/*case 2
+objprm uartobjid,uart2
+sendmsg objinfo_hwnd(uartobjid),0xb6,0,0x7fffffff//0xffff
+sendmsg objinfo_hwnd(uartobjid),0xb1,0xfffefffe,0xfffefffe
+swbreak*/
+swend
+}
 }
 
 if uart2size!-1 & uart2size!strlen(uart2){
@@ -301,8 +315,22 @@ f91_transmitUART 1,peek(uart2,strlen(uart2)-1)
 }else{
 f91_transmitUART 1,8
 }
-memset uart2,0,strlen(uart2),0
-memcpy uart1,uart1bak,strlen(uart1bak),0,0
+memset uart2,0,varsize(uart2),0
+memcpy uart2,uart2bak,strlen(uart2bak),0,0
+if uartobjid!-1{
+switch objectprm4chg
+/*case 1
+objprm uartobjid,uart1
+sendmsg objinfo_hwnd(uartobjid),0xb6,0,0x7fffffff//0xffff
+sendmsg objinfo_hwnd(uartobjid),0xb1,0xfffefffe,0xfffefffe
+swbreak*/
+case 2
+objprm uartobjid,uart2
+sendmsg objinfo_hwnd(uartobjid),0xb6,0,0x7fffffff//0xffff
+sendmsg objinfo_hwnd(uartobjid),0xb1,0xfffefffe,0xfffefffe
+swbreak
+swend
+}
 }
 if objectprm4chg=3{
 color 255,255,255:boxf
@@ -324,7 +352,7 @@ if ez80stop=0 & id4eZ80sim!-1{dumpstartpos=lpeek(eZ80_reg,48)&0xFFFFF0}
 dumpstartposold=dumpstartpos
 dumpstartpos&=0xFFFFF0
 repeat (ginfo(13)/18)-1
-mes strf("%06X",dumpstartpos)+":",1:repeat 16:if (dumpstartpos=(lpeek(eZ80_reg,48)&0xFFFFF0)) & (cnt=(peek(eZ80_reg,48)&0xF)){color 0,0,0:boxf ginfo(22)+8,ginfo(23),ginfo(22)+24,ginfo(23)+18:color 255,255,255}else{color 0,0,0}:mes " "+strf("%02X",mac4ez80dll(dumpstartpos+cnt,0,1)),1:loop:ginfo2223fortmp=ginfo(22)+40,ginfo(23):repeat 16:pos ginfo2223fortmp(0),ginfo2223fortmp(1):if (dumpstartpos=(lpeek(eZ80_reg,48)&0xFFFFF0)) & (cnt=(peek(eZ80_reg,48)&0xF)){color 0,0,0:boxf ginfo(22)+0,ginfo(23),ginfo(22)+16,ginfo(23)+18:color 255,255,255}else{color 0,0,0}:mes strf("%c",mac4ez80dll(dumpstartpos+cnt,0,1))+" ",1:ginfo2223fortmp(0)+=16:loop:mes "":pos 0,ginfo(23)
+mes strf("%06X",dumpstartpos)+":",1:repeat 16:if (dumpstartpos=(lpeek(eZ80_reg,48)&0xFFFFF0)) & (cnt=(peek(eZ80_reg,48)&0xF)){color 0,0,0:boxf ginfo(22)+8,ginfo(23),ginfo(22)+24,ginfo(23)+18:color 255,255,255}else{color 0,0,0}:mes " "+strf("%02X",mac4ez80dll(dumpstartpos+cnt,0,1)&0xFF),1:loop:ginfo2223fortmp=ginfo(22)+40,ginfo(23):repeat 16:pos ginfo2223fortmp(0),ginfo2223fortmp(1):if (dumpstartpos=(lpeek(eZ80_reg,48)&0xFFFFF0)) & (cnt=(peek(eZ80_reg,48)&0xF)){color 0,0,0:boxf ginfo(22)+0,ginfo(23),ginfo(22)+16,ginfo(23)+18:color 255,255,255}else{color 0,0,0}:mes strf("%c",mac4ez80dll(dumpstartpos+cnt,0,1)&0xFF)+" ",1:ginfo2223fortmp(0)+=16:loop:mes "":pos 0,ginfo(23)
 dumpstartpos+=16
 dumpstartpos&=0xFFFFFF
 loop
@@ -639,6 +667,20 @@ swend
 
 swbreak
 case 1
+
+switch argv(2)&3
+case 0
+//logmes strf("%08X",argv(0)):await
+poke sram512,argv(0)&0x7FFFFF,argv(1)
+return peek(flash8mbtable,argv(0)&0x7FFFF)
+swbreak
+case 1
+return peek(flash8mbtable,argv(0)&0x7FFFF)
+swbreak
+swend
+
+swbreak
+case 2
 
 switch argv(2)&3
 case 0
