@@ -190,31 +190,20 @@ uartsignalingsin(0)=uartsignalingsin1,uartsignalingsin2
 uartsignalingsout(0)=uartsignalingsout1,uartsignalingsout2
 noneuartsignalings(0)=clbkforuartcbk,clbkforuartcbk
 sdim memory,1024*1024*16
-/*sdim memory512,1024*512
+sdim memory512,1024*512
 sdim flash8mb,1024*1024*8
-sdim sram512,512*1024*/
-sdim sram512_1,512*1024
-sdim sram512_2,512*1024
+sdim sram512,512*1024
 repeat 5
 lpoke eZ80pages,00+(4*cnt),varptr(nullpagesdesc)
 lpoke eZ80pages,20+(4*cnt),4096
 lpoke eZ80pages,40+(4*cnt),clbk
 loop
-/*repeat 4096:mempagestable(cnt)=varptr(memory)+(4096*cnt):loop
+repeat 4096:mempagestable(cnt)=varptr(memory)+(4096*cnt):loop
 repeat 4096:mempagestable512(cnt)=varptr(memory512)+(4096*(cnt\0x80)):loop
 repeat 4096:flash8mbtable(cnt)=varptr(flash8mb)+(4096*(cnt\0x800)):loop
 lpoke eZ80pages,4*0,varptr(mempagestable)
 lpoke eZ80pages,4*1,varptr(flash8mbtable)
-lpoke eZ80pages,4*2,varptr(mempagestable512)*/
-
-repeat 4096:mempagestable(cnt)=varptr(memory)+(4096*cnt):loop
-repeat 4096:mempagestable512_1(cnt)=varptr(memory512_1)+(4096*(cnt\0x80)):loop
-repeat 4096:mempagestable512_2(cnt)=varptr(memory512_2)+(4096*(cnt\0x80)):loop
-lpoke eZ80pages,4*0,varptr(mempagestable)
-lpoke eZ80pages,4*1,varptr(mempagestable512_1)
-lpoke eZ80pages,4*2,varptr(mempagestable512_2)
-
-
+lpoke eZ80pages,4*2,varptr(mempagestable512)
 mmcspibuf=0,0:mmcidle=1
 //dupptr memoryc00000,varptr(memory)+0xc00000,65536,2
 //bload "eZ80-CPM.bin",memoryc00000
