@@ -1766,6 +1766,35 @@ indirectaddr++
 swbreak
 
 case "LD"
+if ((args4asm0&0x20000000)!0) and ((args4asm1&0x43000000)=0x40000000){
+if indirectaddr!0{if peek(code,indirectaddr-1)=0xdd or peek(code,indirectaddr-1)=0xfd {indirectaddr--}}
+if argsstr4array(0)="IX"{args4asm0&=0xFFFFFFF0:args4asm0|=3}
+poke code,indirectaddr,0xED
+indirectaddr++
+if argsstr4array(0)="IY"{
+poke code,indirectaddr,0x31
+indirectaddr++
+}else{
+poke code,indirectaddr,0x7|(args4asm0<<4)
+indirectaddr++
+}
+
+}else{
+if ((args4asm1&0x20000000)!0) and ((args4asm0&0x43000000)=0x40000000){
+if indirectaddr!0{if peek(code,indirectaddr-1)=0xdd or peek(code,indirectaddr-1)=0xfd {indirectaddr--}}
+if argsstr4array(1)="IX"{args4asm1&=0xFFFFFFF0:args4asm1|=3}
+poke code,indirectaddr,0xED
+indirectaddr++
+if argsstr4array(1)="IY"{
+poke code,indirectaddr,0x3E
+indirectaddr++
+}else{
+poke code,indirectaddr,0xF|(args4asm1<<4)
+indirectaddr++
+}
+
+}else{
+
 if argsstr4array(0)="R" or argsstr4array(1)="R"{
 if argsstr4array(0)="A" or argsstr4array(1)="A"{
 poke code,indirectaddr,0xED
@@ -2096,6 +2125,9 @@ swend
 
 }
 }
+}
+}
+
 }
 }
 swbreak
