@@ -705,6 +705,24 @@ indirectaddr++
 }
 swbreak
 
+case "PEA"
+if strmid(argsstr4array(0),0,3)="IX+" or strmid(argsstr4array(0),0,3)="IX-" or strmid(argsstr4array(0),0,3)="IY+" or strmid(argsstr4array(0),0,3)="IY-"{argsstr4array(0)="("+argsstr4array(0)+")":args4asm0=getcodelabelptr(argsstr4array(0))}
+if strmid(argsstr4array(1),0,3)="IX+" or strmid(argsstr4array(1),0,3)="IX-" or strmid(argsstr4array(1),0,3)="IY+" or strmid(argsstr4array(1),0,3)="IY-"{argsstr4array(1)="("+argsstr4array(1)+")":args4asm1=getcodelabelptr(argsstr4array(1))}
+if strmid(argsstr4array(2),0,3)="IX+" or strmid(argsstr4array(2),0,3)="IX-" or strmid(argsstr4array(2),0,3)="IY+" or strmid(argsstr4array(2),0,3)="IY-"{argsstr4array(2)="("+argsstr4array(2)+")":args4asm2=getcodelabelptr(argsstr4array(2))}
+if indirectaddr!0{if peek(code,indirectaddr-1)=0xdd or peek(code,indirectaddr-1)=0xfd {indirectaddr--}}
+poke code,indirectaddr,0xED
+indirectaddr++
+poke code,indirectaddr,0x65+((args4asm0>>25)&1)
+indirectaddr++
+
+if (args4asm0&0x80000000){
+poke code,indirectaddr,((args4asm0>>16)&0xFF)
+labelsetx(getlabelfromaddr(indirectaddr&0xFFFFFF),0)=argsstr4array(0)
+labelsetx(getlabelfromaddr(indirectaddr&0xFFFFFF),1)="1e"
+indirectaddr++
+}
+swbreak
+
 case "LEA"
 if strmid(argsstr4array(0),0,3)="IX+" or strmid(argsstr4array(0),0,3)="IX-" or strmid(argsstr4array(0),0,3)="IY+" or strmid(argsstr4array(0),0,3)="IY-"{argsstr4array(0)="("+argsstr4array(0)+")":args4asm0=getcodelabelptr(argsstr4array(0))}
 if strmid(argsstr4array(1),0,3)="IX+" or strmid(argsstr4array(1),0,3)="IX-" or strmid(argsstr4array(1),0,3)="IY+" or strmid(argsstr4array(1),0,3)="IY-"{argsstr4array(1)="("+argsstr4array(1)+")":args4asm1=getcodelabelptr(argsstr4array(1))}
